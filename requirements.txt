@@ -23,7 +23,6 @@ mysqlclient
 pycparser
 pypng
 PySocks
-python
 qrcode
 redis
 requests
