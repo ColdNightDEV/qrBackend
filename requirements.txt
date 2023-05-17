@@ -10,11 +10,6 @@ colorama
 cors
 filelock
 Flask
-Flask
-Flask
-Flask
-Flask
-Flask
 future
 gevent
 greenlet
@@ -41,3 +36,4 @@ urllib3
 Werkzeug
 zope.event
 zope.interface
+waitress

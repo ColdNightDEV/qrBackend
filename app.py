@@ -56,6 +56,10 @@ with app.app_context():
 def homepage():
     return render_template("homepage.html")
 
+@app.route("/okay")
+def okay():
+    return render_template("okay.html")
+
 @app.route("/update_profile_image", methods=["POST"])
 def update_profile_image():
     user_id = session.get("user_id")
