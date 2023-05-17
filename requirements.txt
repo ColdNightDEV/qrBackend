@@ -7,3 +7,4 @@ redis
 qrcode
 flask_cors
 requests
+gunicorn
