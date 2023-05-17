@@ -311,7 +311,7 @@ def login_user():
 @app.route("/pay/<user_id>", methods=["POST"])
 def pay_for_qr_code(user_id):
     # Retrieve the user from the database
-    PAYSTACK_SECRET_KEY = "sk_test_9080fa15f69abfac244cb0f461282c7f25ca2751"
+    MARASOFT_SECRET_KEY = "MSFT_test_40M0277A5ADIAQPHIB6WIPYW7K00QUH"
     user = User.query.filter_by(id=user_id).first()
 
     # Check if the user exists
@@ -321,7 +321,7 @@ def pay_for_qr_code(user_id):
     try:
         # Make a payment request to Paystack API to initiate payment
         response = requests.post(
-            'https://api.paystack.co/transaction/initialize',
+            'https://checkout.marasoftpay.live/initiate_transaction',
             json={
                 'amount': 500 * 100,  # Specify the payment amount
                 'email': user.email,  # Provide the user's email
@@ -331,7 +331,7 @@ def pay_for_qr_code(user_id):
                 'callback_url': f"http://localhost:5000/pay/{user_id}/verify"  # Set the callback URL
             },
             headers={
-                'Authorization': f'Bearer {PAYSTACK_SECRET_KEY}',  # Set your Paystack secret key here
+                'Authorization': f'Bearer {MARASOFT_SECRET_KEY}',  # Set your Paystack secret key here
                 'Content-Type': 'application/json',
             }
         )
@@ -353,7 +353,7 @@ def pay_for_qr_code(user_id):
 
 @app.route("/pay/<user_id>/verify", methods=["GET"])
 def verify_payment(user_id):
-    PAYSTACK_SECRET_KEY = "sk_test_9080fa15f69abfac244cb0f461282c7f25ca2751"
+    MARASOFT_SECRET_KEY = "MSFT_test_40M0277A5ADIAQPHIB6WIPYW7K00QUH"
 
     # Retrieve the payment reference and transaction reference from the query parameters
     payment_reference = request.args.get("reference")
@@ -367,7 +367,7 @@ def verify_payment(user_id):
     response = requests.get(
         f"http://api.paystack.co/transaction/verify/{payment_reference}",
         headers={
-            "Authorization": f"Bearer {PAYSTACK_SECRET_KEY}",
+            "Authorization": f"Bearer {MARASOFT_SECRET_KEY}",
             "Content-Type": "application/json",
         }
     )
