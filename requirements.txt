@@ -7,3 +7,4 @@ flask_cors
 redis
 qrcode
 waitress
+requests
