@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, session, redirect, render_template
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template
 from flask_bcrypt import Bcrypt
 from flask_session import Session
 from config import ApplicationConfig
@@ -23,6 +23,15 @@ server_session = Session(app)
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'profile_images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
+
+@app.after_request
+def add_cors_headers(response):
+    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
+
 
 def allowed_file(filename):
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
@@ -110,10 +119,14 @@ def update_profile_image():
         "referral_id": user.referral_id,
         "referral_link": user.referral_link,
         "profile_image": encoded_image if user.profile_image else None,
-        "earnings": user.earnings
+        "earnings": user.earnings,
     }
 
-    return jsonify(response)
+    return redirect("http://localhost:3000/dashboard")
+
+@app.route("/profile_images/<filename>")
+def serve_profile_image(filename):
+    return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
 @app.route('/@me')
@@ -151,13 +164,15 @@ def get_current_user():
         "date_of_birth": user.date_of_birth,
         "local_government": user.local_government,
         "gender": user.gender,
-        "You have earnerd": user.earnings,
+        "earnings": user.earnings,
         "next_of_kin": user.next_of_kin,
         "referral_code": user.referral_code,
         "referral_id": user.referral_id,
         "referral_link": user.referral_link,
         "referred_users": referred_user_data,
-        "profile_image": user.profile_image
+        "profile_image": user.profile_image,
+        "account_number": user.account_number,
+        "bank_name": user.bank_name
     }
 
     return jsonify(response)
@@ -200,7 +215,21 @@ def register_user():
     hashed_password = bcrypt.generate_password_hash(password)
 
     # Generate the qr code
-    data = email
+    data = {
+        "email": email,
+        "first_name": first_name,
+        "last_name": last_name,
+        "phone_number": phone_number,
+        "state_of_origin": state_of_origin,
+        "date_of_birth": date_of_birth,
+        "local_government": local_government,
+        "gender": gender,
+        "next_of_kin": next_of_kin,
+        "account_number": account_number,
+        "bank_name": bank_name,
+        "referral_code": referral_code,
+        "profile_image": profile_image
+    }
     img = qrcode.make(data)
     buffer = BytesIO()
     img.save(buffer)
@@ -209,7 +238,7 @@ def register_user():
     referral_id = generate_referral_id()
 
     # Create the referral link
-    referral_link = f"http://localhost:5000/invite/{referral_id}"
+    referral_link = f"http://localhost:3000/invite/{referral_id}"
 
     new_user = User(
         email=email,
@@ -311,7 +340,6 @@ def login_user():
 @app.route("/pay/<user_id>", methods=["POST"])
 def pay_for_qr_code(user_id):
     # Retrieve the user from the database
-    MARASOFT_SECRET_KEY = "MSFT_test_40M0277A5ADIAQPHIB6WIPYW7K00QUH"
     user = User.query.filter_by(id=user_id).first()
 
     # Check if the user exists
@@ -319,109 +347,109 @@ def pay_for_qr_code(user_id):
         return jsonify({"error": "User not found"}), 404
 
     try:
-        # Make a payment request to Paystack API to initiate payment
+        # Prepare the data payload
+        payload = {
+            "data": {
+                "public_key": "MSFT_test_40M0277A5ADIAQPHIB6WIPYW7K00QUH",
+                "request_type": "test",
+                "merchant_tx_ref": "ref_123456789",
+                "redirect_url": f"http://localhost:5000/pay/{user_id}/verify",  # Update the redirect_url
+                "name": user.first_name,
+                "email_address": user.email,
+                "phone_number": user.phone_number,
+                "amount": "500",
+                "currency": "NGN",
+                "user_bear_charge": "no",
+                "preferred_payment_option": "card",
+                "description": "payment"
+            }
+        }
+
+        # Make a payment request to Marasoft API to initiate payment
         response = requests.post(
-            'https://checkout.marasoftpay.live/initiate_transaction',
-            json={
-                'amount': 500 * 100,  # Specify the payment amount
-                'email': user.email,  # Provide the user's email
-                'metadata': {
-                    'user_id': user.id,  # Include the user_id in metadata
-                },
-                'callback_url': f"http://localhost:5000/pay/{user_id}/verify"  # Set the callback URL
-            },
+            "https://checkout.marasoftpay.live/initiate_transaction",
+            json=payload,
             headers={
-                'Authorization': f'Bearer {MARASOFT_SECRET_KEY}',  # Set your Paystack secret key here
-                'Content-Type': 'application/json',
+                "Content-Type": "application/json",
             }
         )
 
         data = response.json()
-        authorization_url = data['data']['authorization_url']
-        payment_reference = data['data']['reference']
+        print("Marasoft API Response:", data)
 
-        # Update the user's payment reference in the database
-        user.payment_reference = payment_reference
-        db.session.commit()
+        if response.status_code == 200 and data.get("status") == "success":
+            payment_url = data["url"]  # Update this line to access the payment URL
 
-        return jsonify({"authorization_url": authorization_url})
+            # Update the user's payment reference in the database
+            user.payment_reference = payment_url
+            db.session.commit()
+
+            return jsonify({"payment_url": payment_url})
+        else:
+            error_message = data.get("error") if data.get("error") else "Payment initiation failed"
+            print("Payment initiation failed:", error_message)
+            return jsonify({"error": error_message}), 500
 
     except Exception as e:
-        print('Payment initiation failed:', str(e))
+        print("Payment initiation failed:", str(e))
         return jsonify({"error": "Payment initiation failed"}), 500
 
 
 @app.route("/pay/<user_id>/verify", methods=["GET"])
 def verify_payment(user_id):
-    MARASOFT_SECRET_KEY = "MSFT_test_40M0277A5ADIAQPHIB6WIPYW7K00QUH"
+    # Retrieve the query parameters from the callback URL
+    status = request.args.get("status")
+    transaction_reference = request.args.get("txn_ref")
+    payment_reference = request.args.get("msft_ref")
 
-    # Retrieve the payment reference and transaction reference from the query parameters
-    payment_reference = request.args.get("reference")
-    transaction_reference = request.args.get("trxref")
+    # Check if the required parameters are missing
+    if not status or not transaction_reference or not payment_reference:
+        return jsonify({"error": "Missing required parameters"}), 400
 
-    # Check if the payment reference or transaction reference is missing
-    if not payment_reference or not transaction_reference:
-        return jsonify({"error": "Payment reference or transaction reference missing"}), 400
+    try:
+        # Check if the payment was successful
+        if status.lower() == "successful":
+            # Retrieve the user from the database based on the user ID
+            user = User.query.get(user_id)
 
-    # Make a request to the Paystack API to verify the payment
-    response = requests.get(
-        f"http://api.paystack.co/transaction/verify/{payment_reference}",
-        headers={
-            "Authorization": f"Bearer {MARASOFT_SECRET_KEY}",
-            "Content-Type": "application/json",
-        }
-    )
+            if not user:
+                return jsonify({"error": "User not found"}), 404
 
-    # Check the response status code
-    if response.status_code != 200:
-        return jsonify({"error": "Payment verification failed"}), 400
+            # Update the user's payment status if the payment is successful
+            user.paid = True
+            user.payment_reference = transaction_reference  # Set the payment reference as the transaction reference
+            db.session.commit()
 
-    # Retrieve the verification result from the response
-    verification_data = response.json()
+            # Check if the user was referred by another user
+            referral = Referral.query.filter_by(referred_id=user.id).first()
+            if referral:
+                referrer = User.query.get(referral.referrer_id)
+                if referrer:
+                    # Update the referred user's payment status to indicate that the referrer's referred user has paid
+                    referral.referred_user_paid = True
+                    db.session.commit()
 
-    # Check if the payment was successful
-    if verification_data["data"]["status"] == "success":
-        # Retrieve the user from the database based on the user ID
-        user = User.query.get(user_id)
+                    # Update the referrer's earnings
+                    referrer.earnings += 100.0  # Add 100 to the referrer's earnings for every successful payment
+                    db.session.commit()
 
-        if not user:
-            return jsonify({"error": "User not found"}), 404
+            # Redirect to the desired URL
+            return redirect("http://localhost:3000/dashboard")
 
-        # Update the user's payment status if the payment is successful
-        user.paid = True
-        db.session.commit()
-
-        # Check if the user was referred by another user
-        referral = Referral.query.filter_by(referred_id=user.id).first()
-        if referral:
-            referrer = User.query.get(referral.referrer_id)
-            if referrer:
-                # Update the referred user's payment status to indicate that the referrer's referred user has paid
-                referral.referred_user_paid = True
-                db.session.commit()
-
-                # Update the referrer's earnings
-                referrer.earnings += 100.0  # Add 100 to the referrer's earnings for every successful payment
-                db.session.commit()
-
-        # Return a response indicating the payment was successful
+        # Return a response indicating the payment was not successful
         response = {
-            "paid": True,
-            "user_id": user.id,
-            # Include other relevant user data if needed
+            "paid": False,
+            "user_id": user_id,
         }
         return jsonify(response), 200
 
-    # Return a response indicating the payment was not successful
-    response = {
-        "paid": False,
-        "user_id": user_id,
-    }
-    return jsonify("verifypayment.html", response), 200
+    except Exception as e:
+        print("Payment verification failed:", str(e))
+        return jsonify({"error": "Payment verification failed"}), 500
 
     
     
-@app.route("/invite/<referral_id>", methods=["GET", "POST"])
+@app.route("/register/<referral_id>", methods=["GET", "POST"])
 def handle_referral_registration(referral_id):
     # Check if the referral ID exists
     referrer = User.query.filter_by(referral_id=referral_id).first()
@@ -455,7 +483,25 @@ def handle_referral_registration(referral_id):
     earnings = request.json.get("earnings")
 
     # Generate the qr code
-    data = email
+    
+    
+    new_referral_id = generate_referral_id()
+    # Create the referral link
+    new_referral_link = f"http://localhost:3000/invite/{new_referral_id}"
+    
+    data = {
+        "email": email,
+        "first_name": first_name,
+        "last_name": last_name,
+        "phone_number": phone_number,
+        "state_of_origin": state_of_origin,
+        "date_of_birth": date_of_birth,
+        "local_government": local_government,
+        "gender": gender,
+        "next_of_kin": next_of_kin,
+        "account_number": account_number,
+        "bank_name": bank_name
+    }
     img = qrcode.make(data)
     buffer = BytesIO()
     img.save(buffer)
@@ -476,7 +522,8 @@ def handle_referral_registration(referral_id):
         gender=gender,
         next_of_kin=next_of_kin,
         referral_code=None,
-        referral_id=None,
+        referral_id=new_referral_id,
+        referral_link=new_referral_link,
         account_number=account_number,
         bank_name=bank_name,
         earnings=earnings

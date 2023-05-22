@@ -14,5 +14,7 @@ class ApplicationConfig:
     SESSION_TYPE = "redis"
     SESSION_PERMANENT = False
     SESSION_USE_SIGNER = True
-    REDIS_URL = "redis://red-chibjq3hp8u7g2fcfm6g:6379"
-    SESSION_REDIS = redis.from_url(REDIS_URL)
+    
+    SESSION_REDIS = redis.from_url("redis://127.0.0.1:6379")
+    # REDIS_URL = "redis://red-chibjq3hp8u7g2fcfm6g:6379"
+    # SESSION_REDIS = redis.from_url(REDIS_URL)
