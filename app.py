@@ -292,7 +292,7 @@ def register_user():
         "referral_link": new_user.referral_link,
         "account_number": new_user.account_number,
         "bank_name": new_user.bank_name,
-        "profile_image":  f"http://localhost:5000/profile_images/{new_user.profile_image}" if new_user.profile_image else None,
+        "profile_image":  f"https://qrbackend.onrender.com/profile_images/{new_user.profile_image}" if new_user.profile_image else None,
         "earnings": new_user.earnings
     }
 
@@ -353,7 +353,7 @@ def pay_for_qr_code(user_id):
                 "public_key": "MSFT_test_40M0277A5ADIAQPHIB6WIPYW7K00QUH",
                 "request_type": "test",
                 "merchant_tx_ref": "ref_123456789",
-                "redirect_url": f"http://localhost:5000/pay/{user_id}/verify",  # Update the redirect_url
+                "redirect_url": f"https://qrbackend.onrender.com/pay/{user_id}/verify",  # Update the redirect_url
                 "name": user.first_name,
                 "email_address": user.email,
                 "phone_number": user.phone_number,
