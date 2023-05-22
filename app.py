@@ -175,7 +175,10 @@ def get_current_user():
         "bank_name": user.bank_name
     }
 
-    return jsonify(response)
+    response = jsonify(response)
+    response.set_cookie("session_id", str(new_user.id), domain=".onrender.com")
+
+    return response, 201
 
 
 
@@ -295,8 +298,12 @@ def register_user():
         "profile_image":  f"https://qrbackend.onrender.com/profile_images/{new_user.profile_image}" if new_user.profile_image else None,
         "earnings": new_user.earnings
     }
+    
+    response = jsonify(response)
+    response.set_cookie("session_id", str(new_user.id), domain=".onrender.com")
 
-    return jsonify(response), 201
+    return response, 201
+
 
 
 @app.route("/login", methods=["POST"])
@@ -334,7 +341,10 @@ def login_user():
         "referral_link": user.referral_link
     }
 
-    return jsonify(response)
+    response = jsonify(response)
+    response.set_cookie("session_id", str(user.id), domain=".onrender.com")
+
+    return response, 201
 
 
 @app.route("/pay/<user_id>", methods=["POST"])
@@ -441,7 +451,10 @@ def verify_payment(user_id):
             "paid": False,
             "user_id": user_id,
         }
-        return jsonify(response), 200
+        response = jsonify(response)
+        response.set_cookie("session_id", str(new_user.id), domain=".onrender.com")
+
+        return response, 201
 
     except Exception as e:
         print("Payment verification failed:", str(e))
@@ -563,7 +576,10 @@ def handle_referral_registration(referral_id):
         "earnings": new_user.earnings
         }
 
-    return jsonify(response), 200
+    response = jsonify(response)
+    response.set_cookie("session_id", str(new_user.id), domain=".onrender.com")
+
+    return response, 201
 
 
 @app.route("/logout", methods=["POST"])
