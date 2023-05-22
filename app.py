@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template, sessions
 from flask_bcrypt import Bcrypt
 from flask_session import Session
 from config import ApplicationConfig
@@ -176,7 +176,7 @@ def get_current_user():
     }
 
     response = jsonify(response)
-    response.set_cookie("session_id", str(user.id), domain=".onrender.com")
+    session["user_id"] = user.id
 
     return response, 201
 
@@ -299,10 +299,8 @@ def register_user():
         "earnings": new_user.earnings
     }
     
-    response = jsonify(response)
-    response.set_cookie("session_id", str(new_user.id), domain=".onrender.com")
 
-    return response, 201
+    return jsonify(response), 201
 
 
 
@@ -576,10 +574,9 @@ def handle_referral_registration(referral_id):
         "earnings": new_user.earnings
         }
 
-    response = jsonify(response)
     response.set_cookie("session_id", str(new_user.id), domain=".onrender.com")
 
-    return response, 201
+    return jsonify(response), 201
 
 
 @app.route("/logout", methods=["POST"])
