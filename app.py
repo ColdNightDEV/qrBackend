@@ -16,7 +16,7 @@ import os
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
-
+# Me
 bcrypt = Bcrypt(app)
 CORS(app, supports_credentials=True)
 Session(app)
