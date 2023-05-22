@@ -318,6 +318,7 @@ def login_user():
         return jsonify({"error": "Unauthorized"}), 401
 
     session["user_id"] = user.id
+    db.session.commit()
     
 
     response = {
