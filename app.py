@@ -1,9 +1,8 @@
-from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template, sessions
 from flask_bcrypt import Bcrypt
 from flask_session import Session
-from flask_sqlalchemy import SQLAlchemy
 from config import ApplicationConfig
-from models import db, User, Referral, SessionDb
+from models import db, User, Referral
 import qrcode
 from flask_cors import CORS
 from io import BytesIO
@@ -16,10 +15,10 @@ import os
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
-# Me
+
 bcrypt = Bcrypt(app)
 CORS(app, supports_credentials=True)
-Session(app)
+server_session = Session(app)
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'profile_images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -56,8 +55,6 @@ def save_profile_image(image, user_id):
     db.session.commit()
 
     return filename
-
-# db = SQLAlchemy()
 
 db.init_app(app)
 
@@ -134,15 +131,10 @@ def serve_profile_image(filename):
 
 @app.route('/@me')
 def get_current_user():
-    session_data = Session.query.filter_by(id=session.sid).first()
-
-    if not session_data:
-        return jsonify({"error": "Unauthorized"}), 401
-
-    user_id = session_data.data.get("user_id")
+    user_id = session.get("user_id")
 
     if not user_id:
-        return jsonify({"error": "Unauthorized"}), 401
+        return jsonify({"error": "unauthorized"}), 401
 
     user = User.query.filter_by(id=user_id).first()
 
@@ -183,7 +175,10 @@ def get_current_user():
         "bank_name": user.bank_name
     }
 
-    return jsonify(response), 201
+    response = jsonify(response)
+    session["user_id"] = user.id
+
+    return response, 201
 
 
 
@@ -309,8 +304,6 @@ def register_user():
 
 
 
-from flask import session
-
 @app.route("/login", methods=["POST"])
 def login_user():
     email = request.json["email"]
@@ -324,13 +317,33 @@ def login_user():
     if not bcrypt.check_password_hash(user.password, password):
         return jsonify({"error": "Unauthorized"}), 401
 
-    # Save session data to the database
-    session_data = Session(id=session.sid, data=dict(user_id=user.id, user_email=user.email), expiry=session.permanent_session_lifetime)
-    db.session.add(session_data)
+    session["user_id"] = user.id
     db.session.commit()
+    
 
-    return {'id': user.id, "email": user.email}, 200
+    response = {
+        "id": user.id,
+        "email": user.email,
+        "qr_code": user.qr_code,
+        "paid": user.paid,
+        "payment_reference": user.payment_reference,
+        "first_name": user.first_name,
+        "last_name": user.last_name,
+        "phone_number": user.phone_number,
+        "state_of_origin": user.state_of_origin,
+        "date_of_birth": user.date_of_birth,
+        "local_government": user.local_government,
+        "gender": user.gender,
+        "next_of_kin": user.next_of_kin,
+        "referral_code": user.referral_code,
+        "referral_id": user.referral_id,
+        "referral_link": user.referral_link
+    }
 
+    response = jsonify(response)
+    response.set_cookie("session_id", str(user.id), domain=".onrender.com")
+
+    return response, 201
 
 
 @app.route("/pay/<user_id>", methods=["POST"])
