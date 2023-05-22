@@ -1,4 +1,4 @@
-from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template, sessions
+from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template
 from flask_bcrypt import Bcrypt
 from flask_session import Session
 from config import ApplicationConfig
@@ -175,10 +175,7 @@ def get_current_user():
         "bank_name": user.bank_name
     }
 
-    response = jsonify(response)
-    session["user_id"] = user.id
-
-    return response, 201
+    return jsonify(response), 201
 
 
 
@@ -318,32 +315,10 @@ def login_user():
         return jsonify({"error": "Unauthorized"}), 401
 
     session["user_id"] = user.id
-    db.session.commit()
+    session["user_email"] = user.email
     
 
-    response = {
-        "id": user.id,
-        "email": user.email,
-        "qr_code": user.qr_code,
-        "paid": user.paid,
-        "payment_reference": user.payment_reference,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "phone_number": user.phone_number,
-        "state_of_origin": user.state_of_origin,
-        "date_of_birth": user.date_of_birth,
-        "local_government": user.local_government,
-        "gender": user.gender,
-        "next_of_kin": user.next_of_kin,
-        "referral_code": user.referral_code,
-        "referral_id": user.referral_id,
-        "referral_link": user.referral_link
-    }
-
-    response = jsonify(response)
-    response.set_cookie("session_id", str(user.id), domain=".onrender.com")
-
-    return response, 201
+    return {'id': user.id, "email": user.email}, 200
 
 
 @app.route("/pay/<user_id>", methods=["POST"])
