@@ -1,8 +1,9 @@
 from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template
 from flask_bcrypt import Bcrypt
 from flask_session import Session
+from flask_sqlalchemy import SQLAlchemy
 from config import ApplicationConfig
-from models import db, User, Referral, Session
+from models import db, User, Referral, SessionDb
 import qrcode
 from flask_cors import CORS
 from io import BytesIO
@@ -55,6 +56,8 @@ def save_profile_image(image, user_id):
     db.session.commit()
 
     return filename
+
+# db = SQLAlchemy()
 
 db.init_app(app)
 
@@ -270,9 +273,7 @@ def register_user():
     db.session.add(new_user)
     db.session.commit()
 
-    session_data = Session(id=session.sid, data=dict(user_id=new_user.id, user_email=new_user.email), expiry=session.permanent_session_lifetime)
-    db.session.add(session_data)
-    db.session.commit()
+    session["user_id"] = new_user.id
 
     # Process profile image upload
     if profile_image:

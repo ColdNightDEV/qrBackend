@@ -2,7 +2,7 @@ from dotenv import load_dotenv
 import os
 from flask_sqlalchemy import SQLAlchemy
 
-from models import Session
+# from models import SessionDb
 # import redis
 
 load_dotenv()
@@ -15,5 +15,5 @@ class ApplicationConfig:
     SQLALCHEMY_DATABASE_URI = "sqlite:///./db.sqlite"
 
     SESSION_TYPE = "sqlalchemy"
-    SESSION_SQLALCHEMY_DB_MODEL = Session
+    SESSION_SQLALCHEMY_DB_MODEL = "SessionDb"
     SESSION_PERMANENT = False

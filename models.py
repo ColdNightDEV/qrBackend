@@ -1,17 +1,16 @@
 from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from uuid import uuid4
-
 from sqlalchemy import Column, String, DateTime, PickleType
+# from app import db
 
 db = SQLAlchemy()
-
 
 def get_uuid():
     return uuid4().hex
 
-class Session(db.Model):
-    __tablename__ = "sessions"
+class SessionDb(db.Model):
+    __tablename__ = "SessionDb"
     id = Column(String(50), primary_key=True)
     data = Column(PickleType, nullable=False)
     expiry = Column(DateTime, nullable=False)
