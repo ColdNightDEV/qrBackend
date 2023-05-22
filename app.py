@@ -26,7 +26,7 @@ ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
 
 @app.after_request
 def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = 'http://localhost:3000'
+    response.headers['Access-Control-Allow-Origin'] = 'https://enairafrontend.vercel.app'
     response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
     response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
     response.headers['Access-Control-Allow-Credentials'] = 'true'
@@ -122,7 +122,7 @@ def update_profile_image():
         "earnings": user.earnings,
     }
 
-    return redirect("http://localhost:3000/dashboard")
+    return redirect("https://enairafrontend.vercel.app/dashboard")
 
 @app.route("/profile_images/<filename>")
 def serve_profile_image(filename):
@@ -176,7 +176,7 @@ def get_current_user():
     }
 
     response = jsonify(response)
-    response.set_cookie("session_id", str(new_user.id), domain=".onrender.com")
+    response.set_cookie("session_id", str(user.id), domain=".onrender.com")
 
     return response, 201
 
@@ -241,7 +241,7 @@ def register_user():
     referral_id = generate_referral_id()
 
     # Create the referral link
-    referral_link = f"http://localhost:3000/invite/{referral_id}"
+    referral_link = f"https://enairafrontend.vercel.app/invite/{referral_id}"
 
     new_user = User(
         email=email,
@@ -444,7 +444,7 @@ def verify_payment(user_id):
                     db.session.commit()
 
             # Redirect to the desired URL
-            return redirect("http://localhost:3000/dashboard")
+            return redirect("https://enairafrontend.vercel.app/dashboard")
 
         # Return a response indicating the payment was not successful
         response = {
@@ -452,7 +452,7 @@ def verify_payment(user_id):
             "user_id": user_id,
         }
         response = jsonify(response)
-        response.set_cookie("session_id", str(new_user.id), domain=".onrender.com")
+        response.set_cookie("session_id", str(user.id), domain=".onrender.com")
 
         return response, 201
 
@@ -500,7 +500,7 @@ def handle_referral_registration(referral_id):
     
     new_referral_id = generate_referral_id()
     # Create the referral link
-    new_referral_link = f"http://localhost:3000/invite/{new_referral_id}"
+    new_referral_link = f"https://enairafrontend.vercel.app/invite/{new_referral_id}"
     
     data = {
         "email": email,
