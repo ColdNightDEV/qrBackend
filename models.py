@@ -2,11 +2,24 @@ from datetime import datetime
 from flask_sqlalchemy import SQLAlchemy
 from uuid import uuid4
 
+from sqlalchemy import Column, String, DateTime, PickleType
+
 db = SQLAlchemy()
 
 
 def get_uuid():
     return uuid4().hex
+
+class Session(db.Model):
+    __tablename__ = "sessions"
+    id = Column(String(50), primary_key=True)
+    data = Column(PickleType, nullable=False)
+    expiry = Column(DateTime, nullable=False)
+
+    def __init__(self, id, data, expiry):
+        self.id = id
+        self.data = data
+        self.expiry = expiry
 
 
 class Referral(db.Model):

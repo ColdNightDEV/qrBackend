@@ -2,7 +2,7 @@ from flask import Flask, request, jsonify, send_from_directory, session, redirec
 from flask_bcrypt import Bcrypt
 from flask_session import Session
 from config import ApplicationConfig
-from models import db, User, Referral
+from models import db, User, Referral, Session
 import qrcode
 from flask_cors import CORS
 from io import BytesIO
@@ -18,7 +18,7 @@ app.config.from_object(ApplicationConfig)
 
 bcrypt = Bcrypt(app)
 CORS(app, supports_credentials=True)
-server_session = Session(app)
+Session(app)
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'profile_images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
@@ -131,10 +131,15 @@ def serve_profile_image(filename):
 
 @app.route('/@me')
 def get_current_user():
-    user_id = session.get("user_id")
+    session_data = Session.query.filter_by(id=session.sid).first()
+
+    if not session_data:
+        return jsonify({"error": "Unauthorized"}), 401
+
+    user_id = session_data.data.get("user_id")
 
     if not user_id:
-        return jsonify({"error": "unauthorized"}), 401
+        return jsonify({"error": "Unauthorized"}), 401
 
     user = User.query.filter_by(id=user_id).first()
 
@@ -265,7 +270,9 @@ def register_user():
     db.session.add(new_user)
     db.session.commit()
 
-    session["user_id"] = new_user.id
+    session_data = Session(id=session.sid, data=dict(user_id=new_user.id, user_email=new_user.email), expiry=session.permanent_session_lifetime)
+    db.session.add(session_data)
+    db.session.commit()
 
     # Process profile image upload
     if profile_image:
@@ -301,6 +308,8 @@ def register_user():
 
 
 
+from flask import session
+
 @app.route("/login", methods=["POST"])
 def login_user():
     email = request.json["email"]
@@ -314,11 +323,13 @@ def login_user():
     if not bcrypt.check_password_hash(user.password, password):
         return jsonify({"error": "Unauthorized"}), 401
 
-    session["user_id"] = user.id
-    session["user_email"] = user.email
-    
+    # Save session data to the database
+    session_data = Session(id=session.sid, data=dict(user_id=user.id, user_email=user.email), expiry=session.permanent_session_lifetime)
+    db.session.add(session_data)
+    db.session.commit()
 
     return {'id': user.id, "email": user.email}, 200
+
 
 
 @app.route("/pay/<user_id>", methods=["POST"])
