@@ -1,9 +1,10 @@
 flask
 flask_bcrypt
-flask_sqlalchemy
-python-dotenv
-flask_session
 flask_cors
+flask-jwt-extended
+flask_sqlalchemy
+flask-session
+python-dotenv
 redis
 qrcode
 waitress
