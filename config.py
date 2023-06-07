@@ -1,40 +1,89 @@
-from dotenv import load_dotenv
-import os
-import redis
+from datetime import datetime
+from flask_sqlalchemy import SQLAlchemy
+from uuid import uuid4
 
-load_dotenv()
+db = SQLAlchemy()
 
 
-class ApplicationConfig:
+def get_uuid():
+    return uuid4().hex
 
-    # redis_client = redis.Redis()
 
-    SECRET_KEY = "my_secret_key_123"
+class Referral(db.Model):
+    __tablename__ = "Referrals"
+    id = db.Column(db.Integer, primary_key=True)
+    referrer_id = db.Column(db.String(32), db.ForeignKey("Users.id"), nullable=False)
+    referred_id = db.Column(db.String(32), db.ForeignKey("Users.id"), nullable=False)
+    timestamp = db.Column(db.DateTime, default=datetime.utcnow)
 
-    SQLALCHEMY_TRACK_MODIFICATIONS = False
-    SQLALCHEMY_ECHO = True
-    SQLALCHEMY_DATABASE_URI = r"sqlite:///./db.sqlite"
+    referrer = db.relationship("User", foreign_keys=[referrer_id], backref=db.backref("referrer_referrals", lazy=True))
+    referred = db.relationship("User", foreign_keys=[referred_id], backref=db.backref("referrals_received", lazy=True))
 
-    SESSION_TYPE = 'redis'
-    REDIS_URL = "redis://red-chibjq3hp8u7g2fcfm6g:6379"
-    SESSION_REDIS = redis.from_url(REDIS_URL)
-    # SESSION_REDIS = redis_client
-    # JWT_ACCESS_TOKEN_EXPIRES = 10
-    # JWT_SECRET_KEY = "your-secret-key_for_me"
+    def __init__(self, referrer_id, referred_id):
+        self.referrer_id = referrer_id
+        self.referred_id = referred_id
 
-#     from dotenv import load_dotenv
-# import os
-# import redis
 
-# load_dotenv()
+class Transaction(db.Model):
+    __tablename__ = "Transactions"
+    id = db.Column(db.String(32), primary_key=True, unique=True, default=get_uuid)
+    user_id = db.Column(db.String(32), db.ForeignKey("Users.id"), nullable=False)
+    amount = db.Column(db.Float, nullable=False)
 
-# class ApplicationConfig:
+    def __init__(self, user_id, amount):
+        self.user_id = user_id
+        self.amount = amount
 
-#     redis_client = redis.Redis()
 
-#     SECRET_KEY = "my_secret_key_123"
-#     SQLALCHEMY_TRACK_MODIFICATIONS = False
-#     SQLALCHEMY_ECHO = True
-#     SQLALCHEMY_DATABASE_URI = 'postgresql://postgres:1234@localhost:5432/postgres'
-#     SESSION_TYPE = 'redis'
-#     SESSION_REDIS = redis_client
+class User(db.Model):
+    __tablename__ = "Users"
+    id = db.Column(db.String(32), primary_key=True, unique=True, default=get_uuid)
+    email = db.Column(db.String(345), unique=True)
+    password = db.Column(db.Text, nullable=False)
+    qr_code = db.Column(db.Text)
+    paid = db.Column(db.Boolean, default=False)
+    payment_reference = db.Column(db.String(255), default=None)
+    first_name = db.Column(db.String(255))
+    last_name = db.Column(db.String(255))
+    phone_number = db.Column(db.String(20))
+    state_of_origin = db.Column(db.String(255))
+    date_of_birth = db.Column(db.String(10))
+    local_government = db.Column(db.String(255))
+    gender = db.Column(db.String(10))
+    next_of_kin = db.Column(db.String(255))
+    referral_code = db.Column(db.String(255), default=None)
+    referral_id = db.Column(db.String(255), default=None)
+    earnings = db.Column(db.Float, default=0.0)
+    referral_link = db.Column(db.String(255), default=None)
+    account_number = db.Column(db.String(20))
+    bank_name = db.Column(db.String(255))
+    profile_image = db.Column(db.String(255), default=None)
+
+    referrals_made = db.relationship("Referral", foreign_keys=[Referral.referrer_id], backref=db.backref("referrer_user_relationship", lazy=True))
+    referral_received = db.relationship("Referral", foreign_keys=[Referral.referred_id], backref=db.backref("referred_user_relationship", lazy=True, uselist=False))
+
+    refUserPaid = db.relationship("Transaction", backref="user")
+
+    def __init__(self, email, password, qr_code, first_name, last_name, phone_number,
+                 state_of_origin, date_of_birth, local_government, gender, next_of_kin,
+                 referral_code=None, referral_id=None, paid=False, referral_link=None,
+                 account_number=None, bank_name=None, profile_image=None, earnings=0.0):
+        self.email = email
+        self.password = password
+        self.qr_code = qr_code
+        self.first_name = first_name
+        self.last_name = last_name
+        self.phone_number = phone_number
+        self.state_of_origin = state_of_origin
+        self.date_of_birth = date_of_birth
+        self.local_government = local_government
+        self.gender = gender
+        self.next_of_kin = next_of_kin
+        self.referral_code = referral_code
+        self.referral_id = referral_id
+        self.paid = paid
+        self.referral_link = referral_link
+        self.account_number = account_number
+        self.bank_name = bank_name
+        self.profile_image = profile_image
+        self.earnings = earnings
