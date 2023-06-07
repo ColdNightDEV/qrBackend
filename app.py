@@ -1,41 +1,41 @@
-from flask import Flask, request, jsonify, send_from_directory, session, redirect, render_template, sessions
+from flask import Flask, redirect, render_template, request, jsonify, send_from_directory, session
 from flask_bcrypt import Bcrypt
+from flask_cors import CORS, cross_origin
+from flask_jwt_extended import JWTManager, create_access_token, jwt_required, get_jwt_identity
 from flask_session import Session
 from config import ApplicationConfig
+from werkzeug.utils import secure_filename
 from models import db, User, Referral
 import qrcode
-from flask_cors import CORS
+import os
 from io import BytesIO
 import requests
 import string
 import random
 import base64
-from werkzeug.utils import secure_filename
-import os
 
 app = Flask(__name__)
 app.config.from_object(ApplicationConfig)
+CORS(app, allow_headers=True, supports_credentials=True)
 
 bcrypt = Bcrypt(app)
-CORS(app, supports_credentials=True)
+jwt = JWTManager(app)
 server_session = Session(app)
+db.init_app(app)
+
+
+with app.app_context():
+    db.create_all()
 
 UPLOAD_FOLDER = os.path.join(os.getcwd(), 'profile_images')
 app.config['UPLOAD_FOLDER'] = UPLOAD_FOLDER
 ALLOWED_EXTENSIONS = {"png", "jpg", "jpeg"}
 
-@app.after_request
-def add_cors_headers(response):
-    response.headers['Access-Control-Allow-Origin'] = 'https://enairafrontend.vercel.app'
-    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
-    response.headers['Access-Control-Allow-Headers'] = 'Content-Type'
-    response.headers['Access-Control-Allow-Credentials'] = 'true'
-    return response
-
 
 def allowed_file(filename):
     ALLOWED_EXTENSIONS = {'png', 'jpg', 'jpeg'}
     return '.' in filename and filename.rsplit('.', 1)[1].lower() in ALLOWED_EXTENSIONS
+
 
 def save_profile_image(image, user_id):
     filename = secure_filename(image.filename)
@@ -56,22 +56,24 @@ def save_profile_image(image, user_id):
 
     return filename
 
-db.init_app(app)
 
-with app.app_context():
-    db.create_all()
-    
-@app.route("/")
-def homepage():
-    return render_template("homepage.html")
+@app.after_request
+def add_cors_headers(response):
+    # Replace with your frontend domain
+    frontend_domain = 'https://enairafrontend.vercel.app'
+    response.headers['Access-Control-Allow-Origin'] = frontend_domain
+    response.headers['Access-Control-Allow-Methods'] = 'GET, POST, OPTIONS'
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization'
+    response.headers['Access-Control-Allow-Credentials'] = 'true'
+    return response
 
-@app.route("/okay")
-def okay():
-    return render_template("okay.html")
 
+@cross_origin
 @app.route("/update_profile_image", methods=["POST"])
+@jwt_required()
 def update_profile_image():
-    user_id = session.get("user_id")
+    # user_id = session.get("user_id")
+    user_id = get_jwt_identity()
 
     if not user_id:
         return jsonify({"error": "unauthorized"}), 401
@@ -124,24 +126,53 @@ def update_profile_image():
 
     return redirect("https://enairafrontend.vercel.app/dashboard")
 
-@app.route("/profile_images/<filename>")
+
+@app.route("/profile_images/<filename>", methods=["GET"])
 def serve_profile_image(filename):
     return send_from_directory(app.config['UPLOAD_FOLDER'], filename)
 
 
-@app.route('/@me')
+def generate_referral_id():
+    characters = string.ascii_letters + string.digits
+    referral_id = ''.join(random.choices(characters, k=8))
+    existing_user = User.query.filter_by(referral_id=referral_id).first()
+    if existing_user:
+        return generate_referral_id()  # Regenerate if the referral ID already exists
+    return referral_id
+
+
+@app.route("/")
+def homepage():
+    return render_template("homepage.html")
+
+
+@app.route("/okay")
+def okay():
+    return render_template("okay.html")
+
+# import traceback
+
+
+@app.route('/@me',  methods=["GET"])
+@jwt_required()  # Protect the route with JWT authentication
 def get_current_user():
-    user_id = session.get("user_id")
+    user_id = get_jwt_identity()
+
+    # user_id = session.get("user_id")
 
     if not user_id:
         return jsonify({"error": "unauthorized"}), 401
+
+    # Print the request headers
+    print("Request Headers:", request.headers)
 
     user = User.query.filter_by(id=user_id).first()
 
     if not user:
         return jsonify({"error": "User not found"}), 404
 
-    referred_users = User.query.join(Referral, Referral.referred_id == User.id).filter(Referral.referrer_id == user.id).all()
+    referred_users = User.query.join(Referral, Referral.referred_id == User.id).filter(
+        Referral.referrer_id == user.id).all()
 
     referred_user_data = []
     for referred_user in referred_users:
@@ -181,17 +212,6 @@ def get_current_user():
     return response, 201
 
 
-
-
-def generate_referral_id():
-    characters = string.ascii_letters + string.digits
-    referral_id = ''.join(random.choices(characters, k=8))
-    existing_user = User.query.filter_by(referral_id=referral_id).first()
-    if existing_user:
-        return generate_referral_id()  # Regenerate if the referral ID already exists
-    return referral_id
-
-
 @app.route("/register", methods=["POST"])
 def register_user():
     email = request.json["email"]
@@ -206,8 +226,10 @@ def register_user():
     next_of_kin = request.json["next_of_kin"]
     account_number = request.json.get("account_number")
     bank_name = request.json.get("bank_name")
-    referral_code = request.json.get("referral_code", None)  # Optional field, set to None if not provided
-    earnings = request.json.get("earnings", 0.0)  # Optional field, set to 0.0 if not provided
+    # Optional field, set to None if not provided
+    referral_code = request.json.get("referral_code", None)
+    # Optional field, set to 0.0 if not provided
+    earnings = request.json.get("earnings", 0.0)
     profile_image = request.files.get("profile_image")
 
     user_exists = User.query.filter_by(email=email).first() is not None
@@ -268,7 +290,7 @@ def register_user():
     db.session.add(new_user)
     db.session.commit()
 
-    session["user_id"] = new_user.id
+    # session["user_id"] = new_user.id
 
     # Process profile image upload
     if profile_image:
@@ -298,10 +320,8 @@ def register_user():
         "profile_image":  f"https://qrbackend.onrender.com/profile_images/{new_user.profile_image}" if new_user.profile_image else None,
         "earnings": new_user.earnings
     }
-    
 
     return jsonify(response), 201
-
 
 
 @app.route("/login", methods=["POST"])
@@ -317,33 +337,20 @@ def login_user():
     if not bcrypt.check_password_hash(user.password, password):
         return jsonify({"error": "Unauthorized"}), 401
 
-    session["user_id"] = user.id
-    db.session.commit()
-    
+    # Generate an access token
+    access_token = create_access_token(identity=user.id)
 
     response = {
-        "id": user.id,
+        "access_token": access_token,
+        "user_id": user.id,
         "email": user.email,
         "qr_code": user.qr_code,
         "paid": user.paid,
         "payment_reference": user.payment_reference,
-        "first_name": user.first_name,
-        "last_name": user.last_name,
-        "phone_number": user.phone_number,
-        "state_of_origin": user.state_of_origin,
-        "date_of_birth": user.date_of_birth,
-        "local_government": user.local_government,
-        "gender": user.gender,
-        "next_of_kin": user.next_of_kin,
-        "referral_code": user.referral_code,
-        "referral_id": user.referral_id,
-        "referral_link": user.referral_link
+        # "access_token": access_token
     }
 
-    response = jsonify(response)
-    response.set_cookie("session_id", str(user.id), domain=".onrender.com")
-
-    return response, 201
+    return jsonify(response)
 
 
 @app.route("/pay/<user_id>", methods=["POST"])
@@ -362,7 +369,8 @@ def pay_for_qr_code(user_id):
                 "public_key": "MSFT_test_40M0277A5ADIAQPHIB6WIPYW7K00QUH",
                 "request_type": "test",
                 "merchant_tx_ref": "ref_123456789",
-                "redirect_url": f"https://qrbackend.onrender.com/pay/{user_id}/verify",  # Update the redirect_url
+                # Update the redirect_url
+                "redirect_url": f"https://qrbackend.onrender.com/pay/{user_id}/verify",
                 "name": user.first_name,
                 "email_address": user.email,
                 "phone_number": user.phone_number,
@@ -387,7 +395,8 @@ def pay_for_qr_code(user_id):
         print("Marasoft API Response:", data)
 
         if response.status_code == 200 and data.get("status") == "success":
-            payment_url = data["url"]  # Update this line to access the payment URL
+            # Update this line to access the payment URL
+            payment_url = data["url"]
 
             # Update the user's payment reference in the database
             user.payment_reference = payment_url
@@ -395,7 +404,8 @@ def pay_for_qr_code(user_id):
 
             return jsonify({"payment_url": payment_url})
         else:
-            error_message = data.get("error") if data.get("error") else "Payment initiation failed"
+            error_message = data.get("error") if data.get(
+                "error") else "Payment initiation failed"
             print("Payment initiation failed:", error_message)
             return jsonify({"error": error_message}), 500
 
@@ -426,7 +436,8 @@ def verify_payment(user_id):
 
             # Update the user's payment status if the payment is successful
             user.paid = True
-            user.payment_reference = transaction_reference  # Set the payment reference as the transaction reference
+            # Set the payment reference as the transaction reference
+            user.payment_reference = transaction_reference
             db.session.commit()
 
             # Check if the user was referred by another user
@@ -439,10 +450,12 @@ def verify_payment(user_id):
                     db.session.commit()
 
                     # Update the referrer's earnings
-                    referrer.earnings += 100.0  # Add 100 to the referrer's earnings for every successful payment
+                    # Add 100 to the referrer's earnings for every successful payment
+                    referrer.earnings += 100.0
                     db.session.commit()
 
             # Redirect to the desired URL
+            # return redirect("https://enairafrontend.vercel.app/dashboard")
             return redirect("https://enairafrontend.vercel.app/dashboard")
 
         # Return a response indicating the payment was not successful
@@ -451,7 +464,7 @@ def verify_payment(user_id):
             "user_id": user_id,
         }
         response = jsonify(response)
-        response.set_cookie("session_id", str(user.id), domain=".onrender.com")
+        # response.set_cookie("session_id", str(user.id), domain=".onrender.com")
 
         return response, 201
 
@@ -459,9 +472,8 @@ def verify_payment(user_id):
         print("Payment verification failed:", str(e))
         return jsonify({"error": "Payment verification failed"}), 500
 
-    
-    
-@app.route("/register/<referral_id>", methods=["GET", "POST"])
+
+@app.route("/invite/<referral_id>", methods=["GET", "POST"])
 def handle_referral_registration(referral_id):
     # Check if the referral ID exists
     referrer = User.query.filter_by(referral_id=referral_id).first()
@@ -494,13 +506,12 @@ def handle_referral_registration(referral_id):
     bank_name = request.json.get("bank_name")
     earnings = request.json.get("earnings")
 
-    # Generate the qr code
-    
-    
+    new_hashed_password = bcrypt.generate_password_hash(password)
+
     new_referral_id = generate_referral_id()
-    # Create the referral link
+
     new_referral_link = f"https://enairafrontend.vercel.app/invite/{new_referral_id}"
-    
+
     data = {
         "email": email,
         "first_name": first_name,
@@ -541,6 +552,24 @@ def handle_referral_registration(referral_id):
         earnings=earnings
     )
 
+    # Create the new user
+    new_user = User(
+        email=email,
+        password=new_hashed_password,
+        qr_code=None,
+        paid=False,
+        first_name=first_name,
+        last_name=last_name,
+        phone_number=phone_number,
+        state_of_origin=state_of_origin,
+        date_of_birth=date_of_birth,
+        local_government=local_government,
+        gender=gender,
+        next_of_kin=next_of_kin,
+        referral_code=None,
+        referral_id=None
+    )
+
     # Add the new user to the database
     db.session.add(new_user)
     db.session.commit()
@@ -557,43 +586,19 @@ def handle_referral_registration(referral_id):
     response = {
         "id": new_user.id,
         "email": new_user.email,
-        "qr_code": new_user.qr_code,
-        "paid": new_user.paid,
-        "first_name": new_user.first_name,
-        "last_name": new_user.last_name,
-        "phone_number": new_user.phone_number,
-        "state_of_origin": new_user.state_of_origin,
-        "date_of_birth": new_user.date_of_birth,
-        "local_government": new_user.local_government,
-        "gender": new_user.gender,
-        "next_of_kin": new_user.next_of_kin,
-        "referral_code": new_user.referral_code,
-        "referral_id": new_user.referral_id,
-        "referral_link": new_user.referral_link,
-        "account_number": new_user.account_number,
-        "bank_name": new_user.bank_name,
-        "earnings": new_user.earnings
-        }
+        # Other user attributes
+        "referrer_id": referrer.id
+    }
 
-    response.set_cookie("session_id", str(new_user.id), domain=".onrender.com")
-
-    return jsonify(response), 201
+    return jsonify(response), 200
 
 
 @app.route("/logout", methods=["POST"])
 def logout():
-    # Check if the user is logged in
-    if "user_id" in session:
-        # Clear the session
-        session.clear()
-        return jsonify({"message": "Logged out successfully"}), 200
-    else:
-        return jsonify({"message": "No user is currently logged in"}), 200
-
-# ...
-
-
+    # Clear the token on the client-side (e.g., remove from local storage or delete the token cookie)
+    # No server-side token handling is required
+    return jsonify({"message": "Logged out successfully"}), 200
 
 
 if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=5000, debug=True)
+    app.run(debug=True)
